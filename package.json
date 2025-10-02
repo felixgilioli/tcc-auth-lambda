@@ -1,0 +1,9 @@
+{
+  "name": "auth-lambda",
+  "version": "1.0.0",
+  "description": "Lambda de autenticação via CPF",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.1000.0"
+  }
+}

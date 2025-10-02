@@ -1,0 +1,54 @@
+name: Deploy Lambda
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Fazer checkout do código
+        uses: actions/checkout@v4
+      
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Instalar dependências
+        run: npm install --production
+      
+      - name: Criar pacote de deployment
+        run: zip -r auth-lambda.zip . -x "*.git*" "*.github*" "README.md"
+      
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Fazer deploy na Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name tcc-auth-lambda \
+            --zip-file fileb://auth-lambda.zip \
+            --region us-east-1
+      
+      - name: Aguardar atualização da Lambda
+        run: |
+          aws lambda wait function-updated \
+            --function-name tcc-auth-lambda \
+            --region us-east-1
+      
+      - name: Verificar deployment
+        run: |
+          aws lambda get-function \
+            --function-name tcc-auth-lambda \
+            --region us-east-1 \
+            --query 'Configuration.[FunctionName,LastModified,Runtime]' \
+            --output table
