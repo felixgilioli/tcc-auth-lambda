@@ -32,6 +32,46 @@ exports.handler = async (event) => {
             };
         }
 
+        let userExists = true;
+        try {
+            await cognito.adminGetUser({
+                UserPoolId: USER_POOL_ID,
+                Username: cpf
+            }).promise();
+            
+            console.log(`Usuário ${cpf} já existe`);
+        } catch (error) {
+            if (error.code === 'UserNotFoundException') {
+                userExists = false;
+                console.log(`Usuário ${cpf} não encontrado, será criado`);
+            } else {
+                throw error; // Re-lançar outros erros
+            }
+        }
+
+        // Se o usuário não existir, criar e definir senha permanente
+        if (!userExists) {
+            // 1. Criar o usuário
+            await cognito.adminCreateUser({
+                UserPoolId: USER_POOL_ID,
+                Username: cpf,
+                MessageAction: 'SUPPRESS', // Não enviar email de boas-vindas
+                TemporaryPassword: cpf // Senha temporária inicial
+            }).promise();
+            
+            console.log(`Usuário ${cpf} criado com sucesso`);
+
+            // 2. Definir senha permanente (mesmo valor do CPF)
+            await cognito.adminSetUserPassword({
+                UserPoolId: USER_POOL_ID,
+                Username: cpf,
+                Password: cpf,
+                Permanent: true // Define como senha permanente
+            }).promise();
+            
+            console.log(`Senha permanente definida para usuário ${cpf}`);
+        }
+
         // Autenticar usando CPF como username E senha
         const authResult = await cognito.adminInitiateAuth({
             UserPoolId: USER_POOL_ID,
@@ -48,6 +88,7 @@ exports.handler = async (event) => {
             headers,
             body: JSON.stringify({
                 message: 'Autenticação bem-sucedida',
+                newUser: !userExists, // Indica se foi um novo usuário criado
                 idToken: authResult.AuthenticationResult.IdToken,
                 accessToken: authResult.AuthenticationResult.AccessToken,
                 refreshToken: authResult.AuthenticationResult.RefreshToken,
@@ -70,6 +111,9 @@ exports.handler = async (event) => {
         } else if (error.code === 'UserNotConfirmedException') {
             message = 'Usuário não confirmado';
             statusCode = 403;
+        } else if (error.code === 'InvalidPasswordException') {
+            message = 'Senha inválida (verifique as políticas do Cognito)';
+            statusCode = 400;
         } else {
             statusCode = 500;
             message = 'Erro interno ao autenticar';
@@ -80,7 +124,8 @@ exports.handler = async (event) => {
             headers,
             body: JSON.stringify({ 
                 message, 
-                error: error.message 
+                error: error.message,
+                code: error.code
             })
         };
     }
