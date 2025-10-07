@@ -12,7 +12,6 @@ exports.handler = async (event) => {
         'Content-Type': 'application/json'
     };
 
-    // Handle preflight OPTIONS request
     if (event.httpMethod === 'OPTIONS') {
         return {
             statusCode: 200,
@@ -45,34 +44,30 @@ exports.handler = async (event) => {
                 userExists = false;
                 console.log(`Usuário ${cpf} não encontrado, será criado`);
             } else {
-                throw error; // Re-lançar outros erros
+                throw error;
             }
         }
 
-        // Se o usuário não existir, criar e definir senha permanente
-        if (!userExists) {
-            // 1. Criar o usuário
-            await cognito.adminCreateUser({
+         if (!userExists) {
+             await cognito.adminCreateUser({
                 UserPoolId: USER_POOL_ID,
                 Username: cpf,
-                MessageAction: 'SUPPRESS', // Não enviar email de boas-vindas
-                TemporaryPassword: cpf // Senha temporária inicial
+                MessageAction: 'SUPPRESS',
+                TemporaryPassword: cpf
             }).promise();
             
             console.log(`Usuário ${cpf} criado com sucesso`);
 
-            // 2. Definir senha permanente (mesmo valor do CPF)
             await cognito.adminSetUserPassword({
                 UserPoolId: USER_POOL_ID,
                 Username: cpf,
                 Password: cpf,
-                Permanent: true // Define como senha permanente
+                Permanent: true
             }).promise();
             
             console.log(`Senha permanente definida para usuário ${cpf}`);
         }
 
-        // Autenticar usando CPF como username E senha
         const authResult = await cognito.adminInitiateAuth({
             UserPoolId: USER_POOL_ID,
             ClientId: CLIENT_ID,
@@ -88,7 +83,7 @@ exports.handler = async (event) => {
             headers,
             body: JSON.stringify({
                 message: 'Autenticação bem-sucedida',
-                newUser: !userExists, // Indica se foi um novo usuário criado
+                newUser: !userExists,
                 idToken: authResult.AuthenticationResult.IdToken,
                 accessToken: authResult.AuthenticationResult.AccessToken,
                 refreshToken: authResult.AuthenticationResult.RefreshToken,
